@@ -9,10 +9,11 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Table(name = "MY_HOSPITAL")
 public class MyHospital {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "hospitalAlarmId")
+    @Column(name = "hospitalAlarm_id")
     private int hospitalAlarmId;
 
     private String date;
@@ -22,11 +23,11 @@ public class MyHospital {
     private String addMemo;
 
     @ManyToOne
-    @JoinColumn(name = "userId", nullable = false)
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
     @ManyToOne
-    @JoinColumn(name = "hospitalId", nullable = false)
+    @JoinColumn(name = "hospital_id", nullable = false)
     private Hospital hospital;
 
 }
