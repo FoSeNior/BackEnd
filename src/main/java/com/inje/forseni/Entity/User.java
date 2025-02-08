@@ -11,18 +11,25 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Table(name = "USER")
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "user_id")
     private int userId;
-
-    private String nick;
+    @Column(name = "membership_id")
+    private String membershipId;
+    @Column(name = "userName")
+    private String userName;
+    @Column(name = "age")
     private int age;
+    @Column(name = "password")
     private String password;
-    private int fontSize;
 
     // User 엔티티에서 MyHospital 엔티티로의 관계를 매핑
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
     private List<MyHospital> myHospitals;
 
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Medication> medications;
 }
