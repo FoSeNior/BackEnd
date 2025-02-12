@@ -7,7 +7,7 @@ import lombok.Setter;
 @Entity
 @Getter
 @Setter
-@Table(name = "favorite_pill", uniqueConstraints = {
+@Table(name = "FAVORITE_FILL", uniqueConstraints = {
         @UniqueConstraint(columnNames = {"user_id", "item_seq"}) // 중복 방지
 })
 public class FavoritePill {
