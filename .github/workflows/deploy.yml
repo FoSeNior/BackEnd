@@ -1,0 +1,55 @@
+name: Java CI with Gradle
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  PROJECT_NAME: forseni_project
+  BUCKET_NAME: forseni-bucket
+  CODE_DEPLOY_APP_NAME: forseni
+  DEPLOYMENT_GROUP_NAME: forseni_deploy
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    #created properties
+    - uses: actions/checkout@v4
+    - run: touch ./src/main/resources/application.properties
+    - run: echo "${{ secrets.APPLICATION }}" >> ./src/main/resources/application.properties
+    - run: cat ./src/main/resources/application.properties
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+      shell: bash
+
+    - name: Build with Gradle Wrapper
+      run: ./gradlew build
+      shell: bash
+
+    - name: Make Zip File
+      run: zip -qq -r ./github_forseni.zip .
+      shell: bash
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
+        aws-region: ap-northeast-2
+
+    - name: Upload to S3
+      run: aws s3 cp --region ap-northeast-2 ./github_forseni.zip s3://$BUCKET_NAME/$PROJECT_NAME/github_forseni.zip
+
+    - name: Code Deploy
+      run: aws deploy create-deployment --application-name $CODE_DEPLOY_APP_NAME --deployment-config-name CodeDeployDefault.OneAtATime --deployment-group-name $DEPLOYMENT_GROUP_NAME --s3-location bucket=$BUCKET_NAME,bundleType=zip,key=$PROJECT_NAME/github_forseni.zip
