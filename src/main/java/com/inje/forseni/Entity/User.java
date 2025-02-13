@@ -32,4 +32,9 @@ public class User {
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Medication> medications;
+
+    // User 엔티티에서 FavoritePill 엔티티로의 관계 매핑
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<FavoritePill> favoritePills;
 }
+
