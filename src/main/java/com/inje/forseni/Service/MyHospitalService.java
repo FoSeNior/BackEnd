@@ -34,17 +34,39 @@ public class MyHospitalService {
         Hospital hospital = hospitalRepository.findById(requestDto.getHospitalId())
                 .orElseThrow(() -> new IllegalArgumentException("해당 병원이 존재하지 않습니다."));
 
-        MyHospital hospitalAlarm = MyHospital.builder()
-                .user(user)
-                .hospital(hospital)
-                .date(requestDto.getDate())
-                .hourTime(requestDto.getHourTime())
-                .minTime(requestDto.getMinTime())
-                .hospitalAlarmDetail(requestDto.getHospitalAlarmDetail())
-                .addMemo(requestDto.getAddMemo())
-                .build();
+        List<MyHospital> existingHospitalAlarms = myHospitalRepository.findByUserAndHospital(user, hospital);
 
-        myHospitalRepository.save(hospitalAlarm);
+        if (requestDto.getDate() == null || requestDto.getHourTime() == 0 || requestDto.getMinTime() == 0) {
+            return "알람 정보는 필수입니다. 날짜, 시간, 분을 모두 입력해주세요.";
+        }
+
+        if (!existingHospitalAlarms.isEmpty()) {
+            // 기존 알람 중에서 하나를 선택하거나, 여러 개에 대해 처리
+            for (MyHospital existingHospitalAlarm : existingHospitalAlarms) {
+                if (existingHospitalAlarm.getDate() == null) {
+                    existingHospitalAlarm.setDate(requestDto.getDate());
+                    existingHospitalAlarm.setHourTime(requestDto.getHourTime());
+                    existingHospitalAlarm.setMinTime(requestDto.getMinTime());
+                    existingHospitalAlarm.setHospitalAlarmDetail(requestDto.getHospitalAlarmDetail());
+                    existingHospitalAlarm.setAddMemo(requestDto.getAddMemo());
+
+                    myHospitalRepository.save(existingHospitalAlarm);
+                }
+            }
+        } else {
+            MyHospital newHospitalAlarm = MyHospital.builder()
+                    .user(user)
+                    .hospital(hospital)
+                    .date(requestDto.getDate())
+                    .hourTime(requestDto.getHourTime())
+                    .minTime(requestDto.getMinTime())
+                    .hospitalAlarmDetail(requestDto.getHospitalAlarmDetail())
+                    .addMemo(requestDto.getAddMemo())
+                    .build();
+
+            // 새 알람 저장
+            myHospitalRepository.save(newHospitalAlarm);
+        }
 
         return "병원 알람이 저장되었습니다.";
     }
@@ -61,6 +83,9 @@ public class MyHospitalService {
 
         // 병원 예약 정보를 HospitalAlarmResponseDto 형식으로 변환
         List<HospitalAlarmResponseDTO> alarms = myHospitals.stream()
+                .filter(myHospital -> myHospital.getDate() != null
+                        && myHospital.getHourTime() != 0
+                        && myHospital.getMinTime() != 0)  // 필수값이 모두 있는 경우만 처리
                 .map(myHospital -> {
                     Hospital hospital = myHospital.getHospital();
                     return new HospitalAlarmResponseDTO(
@@ -75,6 +100,9 @@ public class MyHospitalService {
                 })
                 .collect(Collectors.toList());
 
+        if (alarms.isEmpty()) {
+            throw new IllegalArgumentException("유효한 병원 예약 정보가 없습니다.");
+        }
         // 병원 예약 정보 리스트를 감싸서 반환
         return new HospitalAlarmListResponseDTO(true, "전체 병원 예약 정보를 성공적으로 조회했습니다.", new HospitalAlarmListResponseDTO.Data(alarms));
     }
@@ -91,6 +119,9 @@ public class MyHospitalService {
 
         // 데이터 리스트 변환
         List<HospitalAlarmResponseDTO> alarms = myHospitals.stream()
+                .filter(myHospital -> myHospital.getDate() != null
+                        && myHospital.getHourTime() != 0
+                        && myHospital.getMinTime() != 0)  // 필수값이 모두 있는 경우만 처리
                 .map(myHospital -> new HospitalAlarmResponseDTO(
                         myHospital.getHospitalAlarmId(),
                         myHospital.getDate(),
@@ -177,4 +208,5 @@ public class MyHospitalService {
 
         return ResponseEntity.ok(response);
     }
+
 }
