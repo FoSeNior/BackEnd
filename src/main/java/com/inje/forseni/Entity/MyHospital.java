@@ -9,7 +9,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Table(name = "MY_HOSPITAL")
+@Table(name = "MY_HOSPITAL", uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "hospital_id"}))
 public class MyHospital {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
