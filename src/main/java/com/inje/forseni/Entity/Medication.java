@@ -37,19 +37,4 @@ public class Medication {
     @Column(name = "end_day", nullable = false, length = 10)
     private String endDay;
 
-    //  기본 생성자에서 medicationDate 초기화
-    public Medication() {
-        if (this.medicationDate == null || this.medicationDate.trim().isEmpty()) {
-            this.medicationDate = this.startDay;
-        }
-    }
-
-    //  @PrePersist -> medicationDate 자동 설정
-    @PrePersist
-    public void prePersist() {
-        if (this.medicationDate == null || this.medicationDate.trim().isEmpty()) {
-            System.out.println("📌 @PrePersist 실행됨: medicationDate가 NULL이므로 startDay로 설정");
-            this.medicationDate = this.startDay;
-        }
-    }
 }

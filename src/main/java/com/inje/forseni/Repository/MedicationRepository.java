@@ -24,4 +24,6 @@ public interface MedicationRepository extends JpaRepository<Medication, Integer>
     List<Medication> findByUser(User userId);
 
 
+
+
 }

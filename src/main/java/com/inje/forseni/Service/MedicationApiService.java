@@ -1,14 +1,15 @@
 package com.inje.forseni.Service;
 
+import com.inje.forseni.Entity.ApiPill;
 import com.inje.forseni.Entity.FavoritePill;
 import com.inje.forseni.Entity.User;
+import com.inje.forseni.Repository.ApiPillRepository;
 import com.inje.forseni.Repository.FavoritePillRepository;
 import com.inje.forseni.Repository.UserRepository;
 import jakarta.transaction.Transactional;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.XML;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -25,139 +26,186 @@ public class MedicationApiService {
     private String API_URL;
 
     @Value("${MedicationKey.url}")
-     private String API_KEY;
-    private final FavoritePillRepository favoritePillRepository;
+    private String API_KEY;
 
+    private final ApiPillRepository apiPillRepository;
+    private final FavoritePillRepository favoritePillRepository;
     private final UserRepository userRepository;
 
-    public MedicationApiService(FavoritePillRepository favoritePillRepository,UserRepository userRepository) {
+    public MedicationApiService(ApiPillRepository apiPillRepository,
+                                FavoritePillRepository favoritePillRepository,
+                                UserRepository userRepository) {
+        this.apiPillRepository = apiPillRepository;
         this.favoritePillRepository = favoritePillRepository;
         this.userRepository = userRepository;
     }
 
-    //  제품 리스트 조회 (이름 + 효능)
-    public List<Map<String, String>> searchPillList(String pillName) {
-        JSONArray dataArray = fetchPillData(pillName);
+    // API에서 모든 약 데이터를 가져와 DB에 저장
+    @Transactional
+    public ResponseEntity<Map<String, Object>> loadAllPills() {
+        JSONArray dataArray = fetchAllPillData();
+        int savedCount = savePillDataToDB(dataArray);
 
-        if (dataArray.isEmpty()) {
-            return Collections.singletonList(Map.of(
-                    "itemName", "정보 없음",
-                    "efcyQesitm", "정보 없음"
-            ));
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "API에서 모든 데이터를 가져와 DB에 저장 완료",
+                "savedCount", savedCount
+        ));
+    }
+
+    // DB에서 약 목록 조회
+    public ResponseEntity<Map<String, Object>> searchPillList(String pillName) {
+        List<ApiPill> pills = apiPillRepository.findByItemNameContainingIgnoreCase(pillName);
+
+        if (pills.isEmpty()) {
+            JSONArray dataArray = fetchPillData(pillName);
+            savePillDataToDB(dataArray);
+            pills = apiPillRepository.findByItemNameContainingIgnoreCase(pillName);
         }
 
         List<Map<String, String>> results = new ArrayList<>();
-        for (int i = 0; i < dataArray.length(); i++) {
-            JSONObject item = dataArray.getJSONObject(i);
+        for (ApiPill pill : pills) {
             results.add(Map.of(
-                    "itemName", item.optString("itemName", "정보 없음"),
-                    "efcyQesitm", item.optString("efcyQesitm", "정보 없음")
+                    "itemName", pill.getItemName(),
+                    "efcyQesitm", pill.getEfcyQesitm()
             ));
         }
 
-        return results;
+        return ResponseEntity.ok(Map.of(
+                "success", !results.isEmpty(),
+                "message", results.isEmpty() ? "해당 약물이 없습니다." : "제품 목록 조회 성공",
+                "data", results
+        ));
     }
 
-    //  제품 상세 조회
-    public Map<String, String> searchPillDetail(String pillName) {
-        JSONArray dataArray = fetchPillData(pillName);
+    //  DB에서 약 상세 조회
+    public ResponseEntity<Map<String, Object>> searchPillDetail(String pillName) {
+        Optional<ApiPill> pillOpt = apiPillRepository.findByItemName(pillName);
 
-        if (dataArray.isEmpty()) {
-            return Map.of("error", "해당 약 정보를 찾을 수 없습니다.");
+        if (pillOpt.isEmpty()) {
+            JSONArray dataArray = fetchPillData(pillName);
+            savePillDataToDB(dataArray);
+            pillOpt = apiPillRepository.findByItemName(pillName);
         }
 
-        JSONObject item = dataArray.getJSONObject(0);
-        return Map.of(
-                "itemSeq", item.optString("itemSeq", "정보 없음"),
-                "itemName", item.optString("itemName", "정보 없음"),
-                "entpName", item.optString("entpName", "정보 없음"),
-                "efcyQesitm", item.optString("efcyQesitm", "정보 없음"),
-                "atpnWarnQesitm", item.optString("atpnWarnQesitm", "정보 없음"),
-                "atpnQesitm", item.optString("atpnQesitm", "정보 없음"),
-                "itemImage", item.optString("itemImage", "이미지 없음")
-        );
+        return ResponseEntity.ok(Map.of(
+                "success", pillOpt.isPresent(),
+                "message", pillOpt.isPresent() ? "제품 상세 조회 성공" : "해당 약물이 없습니다.",
+                "data", pillOpt.orElse(null)
+        ));
     }
 
-    //  찜 기능 (uid와 itemSeq만으로 자동 저장)
+    // 찜 추가 기능
     @Transactional
-    public String addFavoritePill(Integer userId, Long itemSeq) {
-        Optional<JSONObject> pillDetailOpt = getPillDetail(itemSeq);
+    public ResponseEntity<Map<String, Object>> addFavoritePill(Map<String, Object> requestData) {
+        Integer userId;
+        Long itemSeq;
 
-        if (pillDetailOpt.isEmpty()) {
-            return "해당 약 정보를 찾을 수 없습니다.";
+        //  요청 데이터 검증
+        try {
+            userId = (Integer) requestData.get("userId");
+            itemSeq = ((Number) requestData.get("itemSeq")).longValue();
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "userId 또는 itemSeq가 올바르지 않습니다."
+            ));
         }
 
-        JSONObject item = pillDetailOpt.get();
+        //  유저 존재 여부 확인
+        Optional<User> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "해당 userId를 가진 유저가 존재하지 않습니다."
+            ));
+        }
 
-        // 데이터 저장
+        // 이미 찜 목록에 있는지 확인
+        boolean alreadyExists = favoritePillRepository.existsByUser_UserIdAndItemSeq(userId, itemSeq);
+        if (alreadyExists) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "이미 찜 목록에 존재하는 아이템입니다."
+            ));
+        }
+
+        //  약 정보 조회
+        Optional<ApiPill> pillOpt = apiPillRepository.findById(itemSeq);
+        if (pillOpt.isEmpty()) {
+            JSONArray dataArray = fetchPillData(itemSeq.toString());
+            savePillDataToDB(dataArray);
+            pillOpt = apiPillRepository.findById(itemSeq);
+        }
+
+        //  itemSeq가 존재하지 않는 경우
+        if (pillOpt.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "해당 itemSeq에 대한 약 정보를 찾을 수 없습니다."
+            ));
+        }
+
+        // 찜 목록에 추가
         FavoritePill favoritePill = new FavoritePill();
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("해당 유저가 존재하지 않습니다."));
-
-        favoritePill.setUser(user);
+        favoritePill.setUser(userOpt.get());
         favoritePill.setItemSeq(itemSeq);
-        favoritePill.setItemName(item.optString("itemName", "정보 없음"));
-        favoritePill.setEntpName(item.optString("entpName", "정보 없음"));
-        favoritePill.setEfcyQesitm(item.optString("efcyQesitm", "정보 없음"));
-        favoritePill.setAtpnWarnQesitm(item.optString("atpnWarnQesitm", "정보 없음"));
-        favoritePill.setAtpnQesitm(item.optString("atpnQesitm", "정보 없음"));
-        favoritePill.setItemImage(item.optString("itemImage", "이미지 없음"));
+        favoritePill.setItemName(pillOpt.get().getItemName());
+        favoritePill.setEntpName(pillOpt.get().getEntpName());
+        favoritePill.setEfcyQesitm(pillOpt.get().getEfcyQesitm());
+        favoritePill.setAtpnWarnQesitm(pillOpt.get().getAtpnWarnQesitm());
+        favoritePill.setAtpnQesitm(pillOpt.get().getAtpnQesitm());
+        favoritePill.setItemImage(pillOpt.get().getItemImage());
 
         favoritePillRepository.save(favoritePill);
 
-        return favoritePill.getItemName() + "이(가) 찜 목록에 추가되었습니다.";
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", favoritePill.getItemName() + "이(가) 찜 목록에 추가되었습니다."
+        ));
     }
 
-    // itemSeq 기반으로 약 상세 정보 가져오기
-    public Optional<JSONObject> getPillDetail(Long itemSeq) {
-        JSONArray dataArray = fetchPillData(itemSeq.toString());
+    // JPA 트랜잭션 강제 커밋 추가
+    @Transactional
+    public int savePillDataToDB(JSONArray dataArray) {
+        List<ApiPill> pillList = new ArrayList<>();
+        for (int i = 0; i < dataArray.length(); i++) {
+            JSONObject item = dataArray.optJSONObject(i);
+            if (item == null) continue;
 
-        if (dataArray.isEmpty()) {
-            return Optional.empty();
+            ApiPill apiPill = new ApiPill(item.optLong("itemSeq"), item.optString("itemName"),
+                    item.optString("entpName"), item.optString("efcyQesitm"),
+                    item.optString("atpnWarnQesitm"), item.optString("atpnQesitm"),
+                    item.optString("itemImage"));
+
+            pillList.add(apiPill);
         }
+        apiPillRepository.saveAll(pillList);
+        apiPillRepository.flush(); // 트랜잭션 강제 커밋
 
-        return Optional.of(dataArray.getJSONObject(0));
+        return pillList.size();
     }
 
-    //  API 호출 및 데이터 처리 함수
+    //  API 호출 및 데이터 변환
+    private JSONArray fetchAllPillData() {
+        return fetchApiData("");
+    }
+
     private JSONArray fetchPillData(String queryParam) {
+        return fetchApiData("&itemName=" + URLEncoder.encode(queryParam, StandardCharsets.UTF_8));
+    }
+
+    private JSONArray fetchApiData(String queryParam) {
         RestTemplate restTemplate = new RestTemplate();
-
         try {
-            String url;
-            if (queryParam.matches("\\d+")) { // 숫자로만 이루어진 경우 itemSeq로 검색
-                url = API_URL + "?serviceKey=" + API_KEY + "&itemSeq=" + queryParam;
-            } else { // 그렇지 않으면 itemName으로 검색
-                url = API_URL + "?serviceKey=" + API_KEY + "&itemName=" + URLEncoder.encode(queryParam, StandardCharsets.UTF_8);
-            }
-
-            System.out.println("✅ API 요청 URL: " + url);
-
+            String url = API_URL + "?serviceKey=" + API_KEY + queryParam;
             ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
-            String responseBody = response.getBody();
-            System.out.println("✅ API 원본 응답:\n" + responseBody);
+            JSONObject jsonResponse = XML.toJSONObject(response.getBody());
 
-            JSONObject jsonResponse = XML.toJSONObject(responseBody);
-
-            if (!jsonResponse.has("response")) return new JSONArray();
-            JSONObject responseObj = jsonResponse.getJSONObject("response");
-
-            if (!responseObj.has("body")) return new JSONArray();
-            JSONObject bodyObj = responseObj.getJSONObject("body");
-
-            if (!bodyObj.has("items")) return new JSONArray();
-            Object items = bodyObj.get("items");
-
-            if (items instanceof JSONObject) {
-                JSONObject itemsObj = (JSONObject) items;
-                if (itemsObj.has("item")) {
-                    return itemsObj.get("item") instanceof JSONObject
-                            ? new JSONArray().put(itemsObj.getJSONObject("item"))
-                            : itemsObj.getJSONArray("item");
-                }
-            }
-            return new JSONArray();
+            return jsonResponse.optJSONObject("response")
+                    .optJSONObject("body")
+                    .optJSONObject("items")
+                    .optJSONArray("item");
 
         } catch (Exception e) {
             e.printStackTrace();
