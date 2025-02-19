@@ -28,6 +28,13 @@ public class MedicationApiController {
         return medicationApiService.searchPillList(pillName);
     }
 
+    // 모든 약 목록 조회 (새로 추가된 엔드포인트)
+    @GetMapping("/all")
+    public ResponseEntity<Map<String, Object>> getAllPills() {
+        return medicationApiService.getAllPills();
+    }
+
+
     //  제품 상세 조회
     @GetMapping("/{pillName}")
     public ResponseEntity<Map<String, Object>> getPillDetail(@PathVariable String pillName) {

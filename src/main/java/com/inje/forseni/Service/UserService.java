@@ -23,13 +23,44 @@ public class UserService {
     }
 
     // 아이디 중복 확인
-    public ResponseEntity<Map<String, Object>> checkUserIdAvailability(String membershipId) {
+    public ResponseEntity<Map<String, Object>> checkMembershipIdAvailability(String membershipId) {
+        if (membershipId == null || membershipId.trim().isEmpty()) {
+            return badRequest("membershipId가 누락되었습니다.");
+        }
+
         boolean available = !userRepository.existsByMembershipId(membershipId);
-        return ResponseEntity.ok(Map.of(
-                "success", available,
-                "message", available ? "해당 아이디는 사용 가능합니다" : "이미 사용 중인 아이디입니다."
+        if (!available) {
+            return badRequest("이미 사용 중인 아이디입니다.");
+        }
+
+        // 사용 가능한 경우 JWT 토큰 생성
+        String accessToken = jwtTokenProvider.createAccessToken((long) membershipId.hashCode(), membershipId);
+        String refreshToken = jwtTokenProvider.createRefreshToken();
+
+        return success("해당 아이디는 사용 가능합니다", Map.of(
+                "accessToken", accessToken,
+                "refreshToken", refreshToken,
+                "userInfo", Map.of("membershipId", membershipId)
         ));
     }
+
+    // 🚀 추가할 부분 (UserService 클래스 맨 아래!)
+    private ResponseEntity<Map<String, Object>> badRequest(String message) {
+        return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "message", message
+        ));
+    }
+
+    private ResponseEntity<Map<String, Object>> success(String message, Map<String, Object> data) {
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", message,
+                "data", data
+        ));
+    }
+
+
 
     //  회원가입
     public ResponseEntity<Map<String, Object>> signUp(UserDTO userDTO) {

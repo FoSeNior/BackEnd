@@ -16,19 +16,21 @@ public class UserController {
     private final UserService userService;
 
     // 회원가입
-    @PostMapping("/signup")
+    @PostMapping("/signUp")
     public ResponseEntity<Map<String, Object>> signUp(@RequestBody UserDTO userDTO) {
         return userService.signUp(userDTO);
     }
 
     // 아이디 중복 확인
-    @GetMapping("/check/{membershipId}")
-    public ResponseEntity<Map<String, Object>> checkUserIdAvailability(@PathVariable String membershipId) {
-        return userService.checkUserIdAvailability(membershipId);
+    @PostMapping("/signUp/idAvailable")
+    public ResponseEntity<Map<String, Object>> checkMembershipIdAvailability(@RequestBody Map<String, String> request) {
+        String membershipId = request.get("membershipId");
+        return userService.checkMembershipIdAvailability(membershipId);
     }
 
+
     // 로그인
-    @PostMapping("/signin")
+    @PostMapping("/signIn")
     public ResponseEntity<Map<String, Object>> signIn(@RequestBody UserDTO userDTO) {
         return userService.signIn(userDTO);
     }

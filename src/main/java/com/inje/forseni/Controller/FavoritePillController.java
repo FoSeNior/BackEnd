@@ -19,7 +19,7 @@ public class FavoritePillController {
     }
 
     // 찜 목록 조회
-    @GetMapping("/list/{u_id}")
+    @GetMapping("/pill/{u_id}")
     public ResponseEntity<Map<String, Object>> getFavoriteList(@PathVariable("u_id") int userId) {
         return favoritePillService.getFavoritePills(userId);
     }

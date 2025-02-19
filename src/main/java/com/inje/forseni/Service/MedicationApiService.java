@@ -53,6 +53,33 @@ public class MedicationApiService {
         ));
     }
 
+    // ✅ 모든 약 목록 조회 (추가된 메서드)
+    public ResponseEntity<Map<String, Object>> getAllPills() {
+        List<ApiPill> pills = apiPillRepository.findAll();
+
+        if (pills.isEmpty()) {
+            return ResponseEntity.ok(Map.of(
+                    "success", false,
+                    "message", "등록된 약물이 없습니다.",
+                    "data", Collections.emptyList()
+            ));
+        }
+
+        List<Map<String, String>> results = new ArrayList<>();
+        for (ApiPill pill : pills) {
+            results.add(Map.of(
+                    "itemName", pill.getItemName(),
+                    "efcyQesitm", pill.getEfcyQesitm()
+            ));
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "모든 약의 정보를 성공적으로 조회했습니다.",
+                "data", results
+        ));
+    }
+
     // DB에서 약 목록 조회
     public ResponseEntity<Map<String, Object>> searchPillList(String pillName) {
         List<ApiPill> pills = apiPillRepository.findByItemNameContainingIgnoreCase(pillName);
@@ -201,6 +228,8 @@ public class MedicationApiService {
             String url = API_URL + "?serviceKey=" + API_KEY + queryParam;
             ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
             JSONObject jsonResponse = XML.toJSONObject(response.getBody());
+
+            System.out.println("🔍 API 응답 데이터: " + jsonResponse.toString(2));
 
             return jsonResponse.optJSONObject("response")
                     .optJSONObject("body")
