@@ -8,6 +8,7 @@ import com.inje.forseni.Repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import java.util.Comparator;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,6 +40,9 @@ public class MedicationService {
         //  DB에서 데이터 조회
         int alarmCount = medicationRepository.countByUserAndMedicationDate(user.get(), medicationDate);
         List<Medication> meds = medicationRepository.findByUserAndMedicationDate(user.get(), medicationDate);
+
+        //시간순 정렬
+        meds.sort(Comparator.comparingInt(Medication::getMedicineTime));
 
         List<Map<String, Object>> alarms = new ArrayList<>();
         for (Medication med : meds) {
@@ -72,6 +76,11 @@ public class MedicationService {
         }
 
         List<Medication> meds = medicationRepository.findByUser(user.get());
+
+        //  날짜 + 시간순 정렬 추가
+        meds.sort(Comparator.comparing(Medication::getMedicationDate)
+                .thenComparingInt(Medication::getMedicineTime));
+
         List<Map<String, Object>> alarms = new ArrayList<>();
         for (Medication med : meds) {
             alarms.add(Map.of(
